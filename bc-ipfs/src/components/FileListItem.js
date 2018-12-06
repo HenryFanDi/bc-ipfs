@@ -18,6 +18,32 @@ class FileListItem extends Component {
     };
     this.handleAccessFile = this.handleAccessFile.bind(this);
     this.bcAccessFile = this.bcAccessFile.bind(this);
+    this.setupWebViewJavascriptBridge = this.setupWebViewJavascriptBridge.bind(this);
+
+    this.setupWebViewJavascriptBridge( (bridge) => {
+      // Register
+      bridge.registerHandler('FileListItemFetchKey', (data, responseCallback) => {
+        this.fileListItemFetchKey();
+        let responseData = { 'Javascript says' : 'FileListItemFetchKey'};
+        responseCallback(responseData);
+      });
+
+      // Call
+      // bridge.callHandler('FileListItemCall', {'paramKey': 'paramValue'}, (response) => {
+      // });
+    });
+  }
+
+  setupWebViewJavascriptBridge(callback) {
+    if (window.WebViewJavascriptBridge) { return callback(WebViewJavascriptBridge); }
+    if (window.WVJBCallbacks) { return window.WVJBCallbacks.push(callback); }
+    window.WVJBCallbacks = [callback];
+    let WVJBIframe = document.createElement('iframe');
+    WVJBIframe.style.display = 'none';
+    WVJBIframe.src = 'https://__bridge_loaded__';
+    // WVJBIframe.src = ‘wvjbscheme://__BRIDGE_LOADED__’;
+    document.documentElement.appendChild(WVJBIframe);
+    setTimeout(() => { document.documentElement.removeChild(WVJBIframe);}, 0);
   }
 
   handleAccessFile(event) {
@@ -111,6 +137,70 @@ class FileListItem extends Component {
                 });
             }); //submit to contract
         });
+    } catch (error) {
+      console.log(error);
+      this.setState({ ['btn_access_state']: 'normal' });
+    }
+  }
+
+  fileListItemFetchKey() {
+    let a_encrypted_hash = '';
+    let submit_acct = '';
+
+    try {
+      lib_web3.eth
+      .getAccounts(function(err, accounts) {
+        console.log('All available accounts: ' + accounts);
+        submit_acct = accounts[0];
+        console.log('Applying the first eth account[0]: ' + submit_acct);
+      })
+      .then(() => {
+        let realKey = '';
+        let decryptIPFSHash = '';
+        lib_contract.methods
+        .fetchKeyForIPFS()
+        .call(
+        {
+          from: submit_acct,
+        },
+        (error, result) => {
+          if (result) {
+            console.log(
+              'fetching decrypted 1st_partial_key=' +
+              result[0] +
+              ' 2nd_partial_key=' +
+              result[1] +
+              ' encryptedHash=' +
+              result[2] +
+              ' cost=' +
+              result[3]
+              );
+            try {
+              realKey = result[0] + '' + result[1];
+              decryptIPFSHash = crypto_js.AES.decrypt(result[2], realKey).toString(crypto_js.enc.Utf8);
+              a_encrypted_hash = result[2];
+            } catch (err) {
+              console.error(err);
+            }
+          } else {
+            console.log(
+              'decryptIPFS failed for ipfsMetadata=' + a_ipfsmeta + ' encryptedHash=' + a_encrypted_hash
+              );
+          }
+        }
+        )
+        .then(() => {
+          if (decryptIPFSHash != '') {
+            this.setState({ ['btn_access_state']: 'accessed' });
+            console.log('decrypted text shows real IPFS hash: ' + decryptIPFSHash);
+            this.setState({ ['bc_resp_hash']: decryptIPFSHash });
+            this.setState({ ['access_encrypted_hash']: a_encrypted_hash });
+          } else {
+            console.log('decrypted text shows real IPFS hash: ' + decryptIPFSHash);
+            this.setState({ ['btn_access_state']: 'normal' });
+          }
+        });
+      });
     } catch (error) {
       console.log(error);
       this.setState({ ['btn_access_state']: 'normal' });
