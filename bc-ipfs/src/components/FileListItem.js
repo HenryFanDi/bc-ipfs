@@ -22,15 +22,12 @@ class FileListItem extends Component {
 
     this.setupWebViewJavascriptBridge( (bridge) => {
       // Register
-      bridge.registerHandler('FileListItemFetchKey', (data, responseCallback) => {
-        this.fileListItemFetchKey();
-        let responseData = { 'Javascript says' : 'FileListItemFetchKey'};
+      bridge.registerHandler('FileListItemFetchParallelKeyForIPFS', (data, responseCallback) => {
+        let ipfsMetadataHash = data['ipfsMetadataHash'];
+        this.fetchParallelKeyForIPFS(ipfsMetadataHash);
+        let responseData = { 'callback from JS' : 'FileListItemFetchParallelKeyForIPFS'};
         responseCallback(responseData);
       });
-
-      // Call
-      // bridge.callHandler('FileListItemCall', {'paramKey': 'paramValue'}, (response) => {
-      // });
     });
   }
 
@@ -83,6 +80,13 @@ class FileListItem extends Component {
               (error, transactionHash) => {
                 if (transactionHash) {
                   console.log('decryptIPFS tx=' + transactionHash);
+
+                  this.setupWebViewJavascriptBridge( (bridge) => {
+                    // Call
+                    bridge.callHandler('FileListItemAccessButtonDidTap', {[transactionHash]: 'accessFile'}, (response) => {
+                      console.log('callback from iOS ' + response);
+                    });
+                  });
                 } else {
                   console.log('decryptIPFS failed for ipfsMetadata=' + a_ipfsmeta);
                   this.setState({ ['btn_access_state']: 'normal' });
@@ -143,7 +147,9 @@ class FileListItem extends Component {
     }
   }
 
-  fileListItemFetchKey() {
+  fetchParallelKeyForIPFS(ipfsMetadataHash) {
+    console.log(ipfsMetadataHash);
+    
     let a_encrypted_hash = '';
     let submit_acct = '';
 
@@ -158,7 +164,7 @@ class FileListItem extends Component {
         let realKey = '';
         let decryptIPFSHash = '';
         lib_contract.methods
-        .fetchKeyForIPFS()
+        .fetchParallelKeyForIPFS(ipfsMetadataHash)
         .call(
         {
           from: submit_acct,
